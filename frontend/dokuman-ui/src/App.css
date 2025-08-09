@@ -1,0 +1,40 @@
+body, html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f5f5f5;
+}
+
+.h-custom-2 {
+  height: calc(100% - 73px);
+}
+
+img {
+  object-fit: cover;
+  object-position: left;
+  height: 100vh;
+}
+
+h3.fw-normal {
+  font-size: 24px;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+.login-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100vh;
+}
+
+@media (max-width: 768px) {
+  img {
+    display: none;
+  }
+
+  .h-custom-2 {
+    height: auto;
+  }
+}
