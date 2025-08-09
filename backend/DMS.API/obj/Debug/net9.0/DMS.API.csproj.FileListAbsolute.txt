@@ -85,3 +85,4 @@ C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\bin\Debug\net9.
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\bin\Debug\net9.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\bin\Debug\net9.0\DotNetEnv.dll
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\bin\Debug\net9.0\Sprache.dll
+C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\DMS.API.sourcelink.json
