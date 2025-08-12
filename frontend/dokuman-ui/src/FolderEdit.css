@@ -1,0 +1,178 @@
+/* src/components/FolderEdit.css */
+
+/* === ARKA PLAN (MODAL BACKDROP) === */
+.fe-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+/* === MODAL KART === */
+.fe-modal {
+  width: 560px;
+  max-width: 95%;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === HEADER === */
+.fe-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fe-close {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  color: #374151;
+}
+.fe-close:hover { color: #1f2937; }
+
+/* === BODY === */
+.fe-body {
+  padding: 12px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.fe-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* === INPUT === */
+.fe-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  outline: none;
+  background: #ffffff;
+  color: #111827;
+}
+.fe-input:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+
+/* === ADD BUTTON === */
+.fe-addBtn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: none;
+  background: #dc2626; /* kırmızı */
+  color: #ffffff; /* beyaz yazı */
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease-in-out;
+}
+.fe-addBtn:hover {
+  background: #b91c1c; /* daha koyu kırmızı */
+}
+.fe-addBtn:active {
+  transform: translateY(1px);
+}
+
+
+/* === TAG LİSTESİ === */
+.fe-tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* === TAG CHIP === */
+.fe-tagChip {
+  border: 1px solid #e5e7eb;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #f3f4f6;
+  color: #374151;
+  transition: all 0.15s ease-in-out;
+}
+.fe-tagChip:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+.fe-tagChip.selected {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+  font-weight: 500;
+}
+
+.fe-empty {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* === FOOTER === */
+.fe-footer {
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* === CANCEL BUTTON === */
+.fe-cancel {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #dc2626; /* kırmızı */
+  color: #ffffff; /* beyaz yazı */
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease-in-out;
+}
+.fe-cancel:hover {
+  background: #b91c1c; /* daha koyu kırmızı */
+}
+.fe-cancel:active {
+  transform: translateY(1px);
+}
+
+/* === SAVE BUTTON === */
+.fe-save {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.fe-save:hover { background: #1d4ed8; }
+.fe-save:active { transform: translateY(1px); }

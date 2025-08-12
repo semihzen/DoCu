@@ -21,10 +21,13 @@ namespace DMS.API.Models
         public string StoragePath { get; set; } = default!;
         public string? HashSha256 { get; set; }
 
-        public Guid FolderId { get; set; }
-        public Folder Folder { get; set; } = default!;
+        // 🔴 Root’a kayıt için nullable yapıldı
+        public Guid? FolderId { get; set; }
+        public Folder? Folder { get; set; }
 
+        // Users tablosu int olduğu için int bırakıldı
         public int OwnerId { get; set; }
+
         public int VersionNumber { get; set; } = 1;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

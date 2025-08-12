@@ -7,17 +7,20 @@ namespace DMS.API.Data
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-        // DbSets
-        public DbSet<User> Users => Set<User>();                   // mevcut tablo (Id:int)
+        public DbSet<User> Users => Set<User>();
         public DbSet<Folder> Folders => Set<Folder>();
         public DbSet<Document> Documents => Set<Document>();
+        public DbSet<DocumentBackupOnce> DocumentBackupOnce => Set<DocumentBackupOnce>();
         public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
         public DbSet<Tag> Tags => Set<Tag>();
         public DbSet<DocumentTag> DocumentTags => Set<DocumentTag>();
+        public DbSet<FolderTag> FolderTags => Set<FolderTag>();
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
         protected override void OnModelCreating(ModelBuilder b)
         {
+            base.OnModelCreating(b);
+
             // ===== FOLDER =====
             b.Entity<Folder>(e =>
             {
@@ -47,6 +50,7 @@ namespace DMS.API.Data
                 e.HasOne(x => x.Folder)
                  .WithMany(f => f.Documents)
                  .HasForeignKey(x => x.FolderId)
+                 .IsRequired(false)
                  .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -70,7 +74,7 @@ namespace DMS.API.Data
                 e.HasIndex(x => x.Name).IsUnique();
             });
 
-            // ===== DOCUMENT-TAG (N:N) =====
+            // ===== DOCUMENT–TAG (N:N) =====
             b.Entity<DocumentTag>(e =>
             {
                 e.HasKey(x => new { x.DocumentId, x.TagId });
@@ -83,6 +87,22 @@ namespace DMS.API.Data
                 e.HasOne(dt => dt.Tag)
                  .WithMany(t => t.DocumentTags)
                  .HasForeignKey(dt => dt.TagId)
+                 .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ===== FOLDER–TAG (N:N)  <<< ÖNEMLİ: TagId1 sorununu çözer
+            b.Entity<FolderTag>(e =>
+            {
+                e.HasKey(x => new { x.FolderId, x.TagId });
+
+                e.HasOne(x => x.Folder)
+                 .WithMany(f => f.FolderTags)
+                 .HasForeignKey(x => x.FolderId)
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(x => x.Tag)
+                 .WithMany(t => t.FolderTags)
+                 .HasForeignKey(x => x.TagId)
                  .OnDelete(DeleteBehavior.Cascade);
             });
 

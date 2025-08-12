@@ -1,0 +1,200 @@
+:root {
+  --popup-bg: #ffffff;
+  --popup-text: #111827;
+  --popup-border: #e5e7eb;
+  --overlay: rgba(0, 0, 0, 0.35);
+  --shadow: 0 10px 30px rgba(0,0,0,.15);
+  --primary: #2563eb;   /* mavi */
+  --secondary: #0ea5e9; /* açık mavi */
+  --danger: #ef4444;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --gap: 12px;
+}
+
+/* Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000; /* daha güvenli */
+}
+
+/* Kart */
+.modal-card {
+  width: min(520px, 92vw);
+  background: var(--popup-bg);
+  color: var(--popup-text);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--popup-border);
+  overflow: hidden;
+  transform: translateY(6px);
+  animation: popup-in 160ms ease-out;
+  pointer-events: auto;                 /* 👈 kritik */
+}
+/* Kart içindekiler kesin tıklanabilir olsun */
+.modal-card * { pointer-events: auto; }
+.modal-card input,
+.modal-card textarea,
+.modal-card button,
+.modal-card select { pointer-events: auto !important; } /* 👈 garanti */
+
+/* Başlık */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--popup-border);
+}
+.modal-header h3 { font-size: 18px; font-weight: 600; margin: 0; }
+
+/* Kapat butonu */
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: #6b7280;
+}
+.modal-close:hover { background: #f3f4f6; color: #374151; }
+
+/* Gövde */
+.modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* Ayraç */
+.modal-sep { border: 0; border-top: 1px solid var(--popup-border); margin: 10px 0; }
+
+/* Mesaj */
+.modal-msg { font-size: 13px; color: #374151; margin-top: 4px; }
+
+/* Form */
+.modal-body .form-label { font-size: 13px; color: #374151; }
+.modal-body .form-input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--popup-border);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease;
+  background: #fff;
+}
+.modal-body .form-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
+}
+
+/* Dosya seç */
+.custom-file-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--popup-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+}
+.custom-file-upload:hover { background: #f9fafb; }
+
+/* Butonlar */
+.primary, .secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.primary { background: var(--primary); color: #fff; }
+.secondary { background: var(--secondary); color: #fff; }
+.primary:disabled, .secondary:disabled { opacity: .6; cursor: not-allowed; }
+
+/* TagPicker stilleri */
+.tag-list-box{
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--popup-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: #fff;
+}
+.tag-chip{
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin: 4px;
+}
+.tag-chip.active{
+  background: #eef6ff;
+  border-color: #9cc7ff;
+}
+.tag-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  margin: 4px;
+}
+.tag-badge.dashed{ border-style: dashed; }
+.pending-tags{ margin-top: 6px; }
+
+.row{ display:flex; gap:8px; }
+.actions{ display:flex; justify-content:flex-end; gap:8px; margin-top: 10px; }
+
+/* Responsive */
+@media (max-width: 420px) {
+  .modal-card { width: 94vw; }
+  .modal-header { padding: 12px; }
+  .modal-body { padding: 12px; }
+}
+
+/* Animasyon */
+@keyframes popup-in {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+  to   { opacity: 1; transform: translateY(6px)  scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-card { animation: none; transform: none; }
+}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid #e5e7eb;border-radius:999px;background:#f3f4f6;font-size:12px}
+.chip-x{margin-left:6px;border:0;background:transparent;cursor:pointer}
+.suggest-list{margin-top:6px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+.suggest-item{display:block;width:100%;text-align:left;padding:8px 10px;border:0;background:#fff;cursor:pointer}
+.suggest-item:hover{background:#f9fafb}
+.modal-footer .danger{
+  background:#dc2626; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer;
+}
+.modal-footer .danger:hover{ background:#b91c1c; }
+.modal-footer .secondary{
+  background:#fff; border:1px solid #d1d5db; padding:10px 14px; border-radius:8px; cursor:pointer; color:#111827;
+}
