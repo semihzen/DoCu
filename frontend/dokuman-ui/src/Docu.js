@@ -375,6 +375,24 @@ const DocuWebsite = () => {
       <div className="navbar">
         <h1 className="header-title">Welcome DoCu!</h1>
         <div className="navbar-right">
+         {/* 🟦 Sadece adminler için Admin Panel linki */}
+    {isAdmin && (
+      <a
+        href="/Admin"
+        className="admin-link"
+        style={{
+          marginRight: 12,
+          padding: "6px 10px",
+          borderRadius: 6,
+          background: "#3498db",
+          color: "#fff",
+          textDecoration: "none",
+          fontSize: 14
+        }}
+      >
+        Admin Panel
+      </a>
+    )}
           <span className="user-email">{userEmail}</span>
           <span className="role-badge" style={{ marginLeft: 8 }}>{auth.role}</span>
           <button className="logout-button" onClick={handleLogout}><LogOut size={18} /> Çıkış</button>

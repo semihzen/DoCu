@@ -1,23 +1,29 @@
 // src/App.js
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
 import "./style.css";
 import SignInForm from "./SignIn";
 import SignUpForm from "./SignUp";
 import DoCu from "./Docu";
+import AdminPanel from "./AdminPanel"; // ✅ yeni admin panel bileşeni eklendi
 
-// Korumalı rota helper'ı (aynı dosyada)
+// Korumalı rota helper'ı
 const Protected = ({ children }) => {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/Login" replace />;
 };
 
-// Login sayfası (eski App.js içeriğin—aynen burada, başka dosyaya taşımadım)
+// Login sayfası
 const AuthPage = () => {
   const [type, setType] = useState("signIn");
   const navigate = useNavigate();
 
-  // Zaten login'liyse burayı gösterme, panele at
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) navigate("/DoCu", { replace: true });
@@ -35,13 +41,14 @@ const AuthPage = () => {
       <h2> DoCu </h2>
       <div className={containerClass} id="container">
         <SignUpForm setType={setType} />
-        {/* SignInForm'a setType göndermene gerek yok, ama kalırsa da sorun değil */}
         <SignInForm />
         <div className="overlay-container">
           <div className="overlay">
             <div className="overlay-panel overlay-left">
               <h1>Welcome Back!</h1>
-              <p>To keep connected with us please login with your personal info</p>
+              <p>
+                To keep connected with us please login with your personal info
+              </p>
               <button
                 className="ghost"
                 id="signIn"
@@ -52,7 +59,9 @@ const AuthPage = () => {
             </div>
             <div className="overlay-panel overlay-right">
               <h1>Welcome DoCu!</h1>
-              <p>Enter your personal details and start journey with us</p>
+              <p>
+                Enter your personal details and start journey with us
+              </p>
               <button
                 className="ghost"
                 id="signUp"
@@ -72,7 +81,7 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Tek route: /Login → aynı sayfada SignIn + SignUp */}
+        {/* Login sayfası */}
         <Route path="/Login" element={<AuthPage />} />
 
         {/* Korumalı panel: /DoCu */}
@@ -85,7 +94,17 @@ export default function App() {
           }
         />
 
-        {/* Kök ve diğer her şey → /Login */}
+        {/* Korumalı admin panel: /Admin */}
+        <Route
+          path="/Admin"
+          element={
+            <Protected>
+              <AdminPanel />
+            </Protected>
+          }
+        />
+
+        {/* Default yönlendirmeler */}
         <Route path="/" element={<Navigate to="/Login" replace />} />
         <Route path="*" element={<Navigate to="/Login" replace />} />
       </Routes>

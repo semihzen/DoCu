@@ -99,5 +99,3 @@ C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\compressed\qliy0fkt0a-qkjplv481z.gz
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\compressed\o4gyguoejm-cl9irwl6oq.gz
 C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\compressed\n9ftejj013-cl9irwl6oq.gz
-C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\compressed\fuarxom78h-cl9irwl6oq.gz
-C:\Users\Semih Zenginoğlu\Desktop\DokumanSystem\backend\DMS.API\obj\Debug\net9.0\compressed\ggyh8km57p-cl9irwl6oq.gz
