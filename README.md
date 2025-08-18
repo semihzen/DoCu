@@ -20,4 +20,6 @@ A web-based system for managing documents and archives within an organization.
 - Version control for documents
 - Folder creation and management
 - Tagging and advanced search
+- <img width="1920" height="1027" alt="image" src="https://github.com/user-attachments/assets/40475019-1946-4177-af7b-a57e73981877" />
+
 
