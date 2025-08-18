@@ -10,7 +10,6 @@ A web-based system for managing documents and archives within an organization.
 - **ORM**: Entity Framework Core
 - **Authentication**: JWT with role-based authorization
 - **Frontend**: React
-- 
 - **API Docs**: Swagger
 
 ## ✅ Core Features (Planned)
