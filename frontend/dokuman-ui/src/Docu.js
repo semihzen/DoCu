@@ -7,7 +7,7 @@ import EditDocumentModal from "./EditDocumentModal";
 import DescriptionModal from "./description";
 import TagPickerModal from "./TagPickerModal";
 import FolderEditModal from "./FolderEditModal";
-import ConfirmModal from "./ConfirmModal"; // ✅ eklendi
+import ConfirmModal from "./ConfirmModal";
 
 const API_BASE = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5244";
 
@@ -82,13 +82,30 @@ const DocuWebsite = () => {
   const userEmail = localStorage.getItem("email") || "Kullanıcı";
   const auth = useMemo(() => {
     const p = token ? parseJwt(token) : null;
-    const role = p?.role || p?.roles?.[0] || p?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || "User";
+
+    // rolleri farklı claim adlarında güvenli topla
+    const rolesRaw = []
+      .concat(p?.role ?? [])
+      .concat(Array.isArray(p?.roles) ? p.roles : (p?.roles ? [p.roles] : []))
+      .concat(p?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ?? []);
+    const roles = rolesRaw
+      .flatMap(r => Array.isArray(r) ? r : [r])
+      .filter(Boolean)
+      .map(r => String(r).toLowerCase());
+
+    const role =
+      roles.find(r => ["admin","administrator"].includes(r)) ? "Admin" :
+      roles.find(r => ["superuser","super_user","super-user"].includes(r)) ? "SuperUser" :
+      (p?.role || p?.roles?.[0] || p?.["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || "User");
+
     const userId = p?.sub || p?.userId || p?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || null;
-    return { role, userId };
+    return { role, userId, rolesLower: roles };
   }, [token]);
+
   const authHeader = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-  const isAdmin = auth.role?.toLowerCase() === "admin";
-  const isSuperUser = auth.role?.toLowerCase() === "superuser";
+
+  const isAdmin = (auth.rolesLower || []).some(r => r === "admin" || r === "administrator");
+  const isSuperUser = (auth.rolesLower || []).some(r => r === "superuser" || r === "super_user" || r === "super-user");
 
   const logoutOn401 = (res) => {
     if (res?.status === 401 || res?.status === 403) { localStorage.clear(); navigate("/Login"); return true; }
@@ -100,6 +117,7 @@ const DocuWebsite = () => {
     if (!token) { navigate("/Login"); return; }
     (async () => {
       try {
+        // Klasörler: backend admin/superuser'a tümünü, user'a sadece kendisini döner
         const fRes = await fetch(`${API_BASE}/api/Folders`, { headers: { ...authHeader } });
         if (logoutOn401(fRes)) return;
         if (!fRes.ok) throw new Error(`Folders GET failed (${fRes.status})`);
@@ -140,6 +158,7 @@ const DocuWebsite = () => {
       }
       setChildFolders(subs || []);
 
+      // Görünürlük: admin/superuser -> all, user -> mine
       const scope = (isAdmin || isSuperUser) ? "all" : "mine";
       const url = `${API_BASE}/api/Documents?scope=${scope}` + (folderId ? `&folderId=${folderId}` : "");
       const dr = await fetch(url, { headers: { ...authHeader } });
@@ -264,7 +283,7 @@ const DocuWebsite = () => {
     } catch (e) { console.error(e); setError(e.message || "İndirme başarısız."); }
   };
 
-  // ✅ Doküman sil: onay modalı
+  // silme onayı
   const handleDelete = (doc) => {
     setConfirmCfg({
       message: `Bu doküman silinecek!\nBaşlık: ${doc.title || doc.name}\nEmin misiniz?`,
@@ -281,7 +300,6 @@ const DocuWebsite = () => {
     setConfirmOpen(true);
   };
 
-  // ✅ Klasör sil: onay modalı
   const handleFolderDelete = (folder) => {
     setConfirmCfg({
       message: `Bu klasör ve içindeki tüm dosyalar silinecek!\nKlasör: ${folder.name}\nEmin misiniz?`,
@@ -300,13 +318,12 @@ const DocuWebsite = () => {
     setConfirmOpen(true);
   };
 
-  // *** Klasör düzenleme modalını aç ***
   const handleFolderEdit = async (folder) => {
     try {
       const tr = await fetch(`${API_BASE}/api/Folders/${folder.id}/tags`, { headers: { ...authHeader } });
       let tagNames = [];
       if (!logoutOn401(tr) && tr.ok) {
-        const items = await tr.json(); // [{id,name}]
+        const items = await tr.json();
         tagNames = (items || []).map(x => x.name);
       }
       setEditFolder(folder);
@@ -318,7 +335,6 @@ const DocuWebsite = () => {
     }
   };
 
-  // *** Klasör düzenlemeyi kaydet ***
   const saveFolderEdit = async (newName, tagNames) => {
     if (!editFolder) return;
     try {
@@ -347,10 +363,11 @@ const DocuWebsite = () => {
     }
   };
 
+  // Buton görünürlüğü
   const isOwnerForEditDelete = (doc) => (isAdmin ? true : eqIds(getOwnerId(doc), auth.userId));
   const canManageFolder = (folder) => (isAdmin ? true : eqIds(getOwnerId(folder), auth.userId));
 
-  // --- Search helpers + filtreler ---
+  // --- filtreleme ---
   const norm = (s) => (s ?? "").toString().toLowerCase().trim();
   const q = norm(searchTerm);
   const tagQuery = q.startsWith("tag:") ? q.slice(4).trim() : null;
@@ -375,24 +392,23 @@ const DocuWebsite = () => {
       <div className="navbar">
         <h1 className="header-title">Welcome DoCu!</h1>
         <div className="navbar-right">
-         {/* 🟦 Sadece adminler için Admin Panel linki */}
-    {isAdmin && (
-      <a
-        href="/Admin"
-        className="admin-link"
-        style={{
-          marginRight: 12,
-          padding: "6px 10px",
-          borderRadius: 6,
-          background: "#3498db",
-          color: "#fff",
-          textDecoration: "none",
-          fontSize: 14
-        }}
-      >
-        Admin Panel
-      </a>
-    )}
+          {isAdmin && (
+            <a
+              href="/Admin"
+              className="admin-link"
+              style={{
+                marginRight: 12,
+                padding: "6px 10px",
+                borderRadius: 6,
+                background: "#3498db",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: 14
+              }}
+            >
+              Admin Panel
+            </a>
+          )}
           <span className="user-email">{userEmail}</span>
           <span className="role-badge" style={{ marginLeft: 8 }}>{auth.role}</span>
           <button className="logout-button" onClick={handleLogout}><LogOut size={18} /> Çıkış</button>
@@ -472,7 +488,7 @@ const DocuWebsite = () => {
             <input id="file-upload" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ display: "none" }} />
           </div>
 
-          {/* Upload button opens Tag modal */}
+          {/* Upload */}
           <button onClick={openTagModalForDoc} className="upload-button" disabled={uploading}>
             {uploading ? "Uploading..." : "Upload"}
           </button>
@@ -564,7 +580,6 @@ const DocuWebsite = () => {
                               <a href="#!" className="see-desc-link" onClick={(e) => { e.preventDefault(); setDescDoc(doc); }} aria-label="See description">See description </a>
                               {doc.title || doc.name}
                             </h4>
-                            
 
                             {Array.isArray(doc.tags) && doc.tags.length > 0 && (
                               <div className="meta-row" style={{ marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -640,7 +655,6 @@ const DocuWebsite = () => {
         onConfirm={onTagModalConfirm}
       />
 
-      {/* Klasör Düzenleme Modalı */}
       <FolderEditModal
         open={!!editFolder}
         folder={editFolder}
@@ -650,7 +664,6 @@ const DocuWebsite = () => {
         onSave={saveFolderEdit}
       />
 
-      {/* ✅ Silme onayı (doküman + klasör) */}
       <ConfirmModal
         open={confirmOpen}
         message={confirmCfg.message}

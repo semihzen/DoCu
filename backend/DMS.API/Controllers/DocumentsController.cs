@@ -6,9 +6,8 @@ using System.Security.Cryptography;
 using DMS.API.Data;
 using DMS.API.Models;
 using DMS.API.Controllers;
-using System.Linq; // ADDED
+using System.Linq;
 
-// ADDED: Sadece güncellemede kullanılacak DTO
 public class DocumentUpdateDto
 {
     public string? Title { get; set; }
@@ -28,10 +27,7 @@ public class DocumentsController : ControllerBase
         _db = db; _env = env;
     }
 
-    // ==== helpers ====
-    private bool IsPrivileged() => User.IsAdmin() || User.IsSuperUser();
-
-    // Users.Id INT olduğu için claim'den INT çekiyoruz
+    // ==== auth helpers ====
     private bool TryGetUserId(out int userId)
     {
         userId = 0;
@@ -41,16 +37,30 @@ public class DocumentsController : ControllerBase
         return int.TryParse(s, out userId);
     }
 
-    // ADDED: Tek-kayıt arşiv (UPDATE/DELETE öncesi mevcut satırı dbo.Documents_backup_Once'a kopyalar)
-  // Her doküman için sadece 1 yedek satır tutar (en güncel "önceki" hâl)
-private async Task ArchiveOnceAsync(Document doc)
-{
-    // 1) Aynı Id için varsa eski yedeği sil
-    await _db.Database.ExecuteSqlInterpolatedAsync(
-        $"DELETE FROM [dbo].[Documents_backup_Once] WHERE [Id] = {doc.Id};");
+    private (bool IsAdmin, bool IsSuperUser, int UserId) GetAuth()
+    {
+        TryGetUserId(out var uid);
 
-    // 2) Mevcut (güncellemeden/ silmeden önceki) hâlini ekle
-    await _db.Database.ExecuteSqlInterpolatedAsync($@"
+        var roleValues = User.FindAll(ClaimTypes.Role).Select(r => r.Value)
+            .Concat(User.FindAll("role").Select(r => r.Value))
+            .Concat(User.FindAll("roles").Select(r => r.Value))
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v.Trim().ToLowerInvariant())
+            .ToList();
+
+        bool isAdmin = roleValues.Contains("admin") || roleValues.Contains("administrator");
+        bool isSuperUser = roleValues.Contains("superuser") || roleValues.Contains("super_user") || roleValues.Contains("super-user");
+
+        return (isAdmin, isSuperUser, uid);
+    }
+
+    // Tek-kayıt arşiv (UPDATE/DELETE öncesi)
+    private async Task ArchiveOnceAsync(Document doc)
+    {
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM [dbo].[Documents_backup_Once] WHERE [Id] = {doc.Id};");
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($@"
 INSERT INTO [dbo].[Documents_backup_Once]
 ([Id],[Title],[Description],[FileName],[MimeType],[FileSizeBytes],
  [StoragePath],[HashSha256],[FolderId],[OwnerId],[VersionNumber],
@@ -59,8 +69,7 @@ VALUES
 ({doc.Id},{doc.Title},{doc.Description},{doc.FileName},{doc.MimeType},{doc.FileSizeBytes},
  {doc.StoragePath},{doc.HashSha256},{doc.FolderId},{doc.OwnerId},{doc.VersionNumber},
  {doc.CreatedAt},{doc.UpdatedAt},{true});");
-}
-
+    }
 
     // GET /api/Documents?scope=all|mine&folderId=&q=&tag=&tagId=
     [HttpGet]
@@ -71,22 +80,25 @@ VALUES
         [FromQuery] string? tag = null,
         [FromQuery] Guid? tagId = null)
     {
-        TryGetUserId(out var uid);
-        var isPrivileged = IsPrivileged();
+        var auth = GetAuth();
+        bool canViewAll = auth.IsAdmin || auth.IsSuperUser;
 
         var docs = _db.Documents
             .Include(d => d.Folder)
             .Include(d => d.DocumentTags).ThenInclude(dt => dt.Tag)
             .AsQueryable();
 
-        if (!(isPrivileged && scope.Equals("all", StringComparison.OrdinalIgnoreCase)))
-            docs = docs.Where(d => d.OwnerId == uid);
+        // Görünürlük: admin/superuser -> tümü, user -> sadece kendi
+        if (!canViewAll)
+            docs = docs.Where(d => d.OwnerId == auth.UserId);
 
+        // Klasör filtresi
         if (folderId.HasValue)
             docs = docs.Where(d => d.FolderId == folderId);
         else
             docs = docs.Where(d => d.FolderId == null); // root görünümü
 
+        // Arama
         if (!string.IsNullOrWhiteSpace(q))
             docs = docs.Where(d => d.Title.Contains(q) || (d.Description ?? "").Contains(q));
 
@@ -95,7 +107,6 @@ VALUES
         else if (!string.IsNullOrWhiteSpace(tag))
             docs = docs.Where(d => d.DocumentTags.Any(t => t.Tag.Name == tag));
 
-        // Owner bilgisi join
         var result = await (
             from d in docs
             join u in _db.Users.AsNoTracking() on d.OwnerId equals u.Id into du
@@ -122,35 +133,33 @@ VALUES
         return Ok(result);
     }
 
-    // DocumentsController.cs
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] DocumentUpdateDto req)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
-
+        var auth = GetAuth();
         var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == id);
         if (doc is null) return NotFound("Document not found");
 
-        var canEdit = IsPrivileged() || doc.OwnerId == uid;
+        // 🔐 Admin herkesi düzenler, SuperUser SADECE kendi dokümanını düzenler
+        var canEdit = auth.IsAdmin || doc.OwnerId == auth.UserId;
         if (!canEdit) return Forbid();
 
-        // ADDED: Güncellemeden ÖNCE mevcut halini arşivle
         await ArchiveOnceAsync(doc);
 
-        // Title
         if (!string.IsNullOrWhiteSpace(req.Title))
             doc.Title = req.Title.Trim();
 
-        // Description
         if (req.Description != null)
             doc.Description = string.IsNullOrWhiteSpace(req.Description) ? null : req.Description.Trim();
 
-        // Folder taşıma (opsiyonel)
         if (req.FolderId.HasValue)
         {
             var folder = await _db.Folders.FindAsync(req.FolderId.Value);
             if (folder is null) return NotFound("Folder not found");
-            if (!IsPrivileged() && folder.OwnerId != uid) return Forbid();
+
+            // Kendi olmayan klasöre taşıma: admin serbest; super/user sadece kendi klasörüne
+            if (!(auth.IsAdmin || folder.OwnerId == auth.UserId)) return Forbid();
+
             doc.FolderId = folder.Id;
         }
 
@@ -164,12 +173,12 @@ VALUES
     [HttpGet("{id:guid}/download")]
     public async Task<IActionResult> Download(Guid id)
     {
-        TryGetUserId(out var uid);
-
+        var auth = GetAuth();
         var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == id);
         if (doc is null) return NotFound("Document not found");
 
-        var canDownload = IsPrivileged() || doc.OwnerId == uid;
+        // Görüntüleme/indirme: admin & superuser & owner
+        var canDownload = (auth.IsAdmin || auth.IsSuperUser) || doc.OwnerId == auth.UserId;
         if (!canDownload) return Forbid();
 
         var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
@@ -203,14 +212,17 @@ VALUES
     {
         if (file == null || file.Length == 0) return BadRequest("File is required.");
         if (string.IsNullOrWhiteSpace(title)) return BadRequest("Title is required.");
-        if (!TryGetUserId(out var uid)) return Forbid();
+
+        var auth = GetAuth();
 
         Folder? folder = null;
         if (folderId.HasValue)
         {
             folder = await _db.Folders.FindAsync(folderId.Value);
             if (folder is null) return NotFound("Folder not found");
-            if (!IsPrivileged() && folder.OwnerId != uid) return Forbid();
+
+            // Kendi olmayan klasöre yükleme: admin serbest; super/user kendi klasörü
+            if (!(auth.IsAdmin || folder.OwnerId == auth.UserId)) return Forbid();
         }
 
         var (pathOnDisk, storedFileName, sha) = await SaveFileAsync(file);
@@ -220,11 +232,11 @@ VALUES
             Title = title.Trim(),
             Description = string.IsNullOrWhiteSpace(description) ? null : description!.Trim(),
             FolderId = folder?.Id,
-            OwnerId = uid,
+            OwnerId = auth.UserId,
             FileName = file.FileName,
             MimeType = file.ContentType ?? "application/octet-stream",
             FileSizeBytes = file.Length,
-            StoragePath = storedFileName, // sadece dosya adı
+            StoragePath = storedFileName,
             HashSha256 = sha,
             VersionNumber = 1,
             CreatedAt = DateTime.UtcNow
@@ -240,7 +252,7 @@ VALUES
             MimeType = doc.MimeType,
             FileSizeBytes = file.Length,
             HashSha256 = sha,
-            CreatedBy = uid,
+            CreatedBy = auth.UserId,
             CreatedAt = DateTime.UtcNow
         });
 
@@ -267,12 +279,13 @@ VALUES
     [HttpPost("{id:guid}/versions")]
     public async Task<IActionResult> AddVersion(Guid id, IFormFile file)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var doc = await _db.Documents.Include(d => d.Folder).FirstOrDefaultAsync(d => d.Id == id);
         if (doc is null) return NotFound();
 
-        var canEdit = IsPrivileged() || doc.OwnerId == uid;
+        // 🔐 Admin herkesi, SuperUser sadece kendi dokümanını güncelleyebilir
+        var canEdit = auth.IsAdmin || doc.OwnerId == auth.UserId;
         if (!canEdit) return Forbid();
 
         var (pathOnDisk, storedFileName, sha) = await SaveFileAsync(file);
@@ -287,7 +300,7 @@ VALUES
             MimeType = file.ContentType ?? "application/octet-stream",
             FileSizeBytes = file.Length,
             HashSha256 = sha,
-            CreatedBy = uid,
+            CreatedBy = auth.UserId,
             CreatedAt = DateTime.UtcNow
         });
 
@@ -307,14 +320,15 @@ VALUES
     [HttpPost("{id:guid}/tags")]
     public async Task<IActionResult> SetTags(Guid id, [FromBody] List<string> tagNames)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var doc = await _db.Documents
             .Include(d => d.DocumentTags)
             .FirstOrDefaultAsync(d => d.Id == id);
         if (doc is null) return NotFound();
 
-        var canEdit = IsPrivileged() || doc.OwnerId == uid;
+        // 🔐 Admin herkesi, SuperUser sadece kendi dokümanını etiketleyebilir
+        var canEdit = auth.IsAdmin || doc.OwnerId == auth.UserId;
         if (!canEdit) return Forbid();
 
         _db.DocumentTags.RemoveRange(doc.DocumentTags);
@@ -330,22 +344,21 @@ VALUES
         return NoContent();
     }
 
-    // DELETE /api/Documents/{id}  ✅ DOKÜMAN SİL (DB + dosya)
+    // DELETE /api/Documents/{id}
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var doc = await _db.Documents.FirstOrDefaultAsync(d => d.Id == id);
         if (doc is null) return NotFound();
 
-        var canDelete = IsPrivileged() || doc.OwnerId == uid;
+        // 🔐 Admin herkesi, SuperUser sadece kendi dokümanını silebilir
+        var canDelete = auth.IsAdmin || doc.OwnerId == auth.UserId;
         if (!canDelete) return Forbid();
 
-        // ADDED: Silmeden ÖNCE mevcut halini arşivle
         await ArchiveOnceAsync(doc);
 
-        // Dosyayı wwwroot/uploads'tan da sil
         var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
         var uploadsRoot = Path.Combine(webRoot, "uploads");
         var candidate = doc.StoragePath ?? string.Empty;
@@ -356,18 +369,14 @@ VALUES
             if (System.IO.File.Exists(fullPath))
                 System.IO.File.Delete(fullPath);
         }
-        catch
-        {
-            // isteğe bağlı: logla
-        }
+        catch { /* loglanabilir */ }
 
-        _db.Documents.Remove(doc); // FK ile versions/tags da gider
+        _db.Documents.Remove(doc);
         await _db.SaveChangesAsync();
         await TagsController.CleanupUnusedTagsAsync(_db);
         return NoContent();
     }
 
-    // --- file save helper ---
     private async Task<(string pathOnDisk, string storedFileName, string sha256)> SaveFileAsync(IFormFile file)
     {
         var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");

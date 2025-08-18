@@ -127,22 +127,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// HTTPS
 app.UseHttpsRedirection();
 
-// Static files (upload edilenleri servis et)
 var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads");
 Directory.CreateDirectory(uploadsRoot);
-app.UseStaticFiles(); // wwwroot/* için
+app.UseStaticFiles(); 
 
-// CORS (Auth'tan önce bile olur, önemli olan MapControllers'tan önce olması)
 app.UseCors("AllowLocalhost3000");
 
-// Auth
-app.UseAuthentication(); // JWT varsa çalışır; yoksa no-op
 app.UseAuthorization();
 
-// API endpoints
 app.MapControllers();
 
 app.Run();

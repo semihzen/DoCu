@@ -14,10 +14,7 @@ public class FoldersController : ControllerBase
     private readonly AppDbContext _db;
     public FoldersController(AppDbContext db) => _db = db;
 
-    // DTOs
     public sealed record UpdateFolderDto(string Name);
-
-    private bool IsPrivileged() => User.IsAdmin() || User.IsSuperUser();
 
     private bool TryGetUserId(out int userId)
     {
@@ -28,15 +25,35 @@ public class FoldersController : ControllerBase
         return int.TryParse(s, out userId);
     }
 
+    private (bool IsAdmin, bool IsSuperUser, int UserId) GetAuth()
+    {
+        TryGetUserId(out var uid);
+
+        var roleValues = User.FindAll(ClaimTypes.Role).Select(r => r.Value)
+            .Concat(User.FindAll("role").Select(r => r.Value))
+            .Concat(User.FindAll("roles").Select(r => r.Value))
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v.Trim().ToLowerInvariant())
+            .ToList();
+
+        bool isAdmin = roleValues.Contains("admin") || roleValues.Contains("administrator");
+        bool isSuperUser = roleValues.Contains("superuser") || roleValues.Contains("super_user") || roleValues.Contains("super-user");
+
+        return (isAdmin, isSuperUser, uid);
+    }
+
     // GET /api/Folders?parentId=<guid?>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<FolderVm>>> Get([FromQuery] Guid? parentId)
     {
-        var privileged = IsPrivileged();
-        TryGetUserId(out var uid);
+        var auth = GetAuth();
 
         var q = _db.Folders.AsNoTracking().AsQueryable();
-        if (!privileged) q = q.Where(f => f.OwnerId == uid);
+
+        // Görüntüleme: admin & superuser tüm klasörleri; user sadece kendi klasörlerini
+        if (!(auth.IsAdmin || auth.IsSuperUser))
+            q = q.Where(f => f.OwnerId == auth.UserId);
+
         if (parentId.HasValue) q = q.Where(f => f.ParentId == parentId);
 
         var items = await (
@@ -58,19 +75,20 @@ public class FoldersController : ControllerBase
     public async Task<ActionResult<FolderVm>> Create([FromBody] CreateFolderDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Name)) return BadRequest("Folder name is required.");
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         Folder? parent = null;
         if (dto.ParentId.HasValue)
         {
             parent = await _db.Folders.FirstOrDefaultAsync(x => x.Id == dto.ParentId.Value);
             if (parent is null) return NotFound("Parent folder not found.");
-            if (!IsPrivileged() && parent.OwnerId != uid) return Forbid();
+
+            // Başkasının klasörü altına ekleme: admin serbest; super/user kendi klasörü
+            if (!(auth.IsAdmin || parent.OwnerId == auth.UserId)) return Forbid();
         }
 
         var name = dto.Name.Trim();
 
-        // aynı parent altında aynı isim olmasın
         var exists = await _db.Folders.AnyAsync(f =>
             f.ParentId == dto.ParentId &&
             f.Name.ToLower() == name.ToLower());
@@ -80,7 +98,7 @@ public class FoldersController : ControllerBase
         {
             Name = name,
             ParentId = dto.ParentId,
-            OwnerId = uid,
+            OwnerId = auth.UserId,
             Path = parent is null ? $"/{name}" : $"{parent.Path}/{name}",
             Level = parent is null ? 0 : parent.Level + 1,
             CreatedAt = DateTime.UtcNow,
@@ -88,9 +106,9 @@ public class FoldersController : ControllerBase
         };
 
         _db.Folders.Add(folder);
-        await _db.SaveChangesAsync(); // Id oluştu
+        await _db.SaveChangesAsync();
 
-        // TAG EKLE (isteğe bağlı)
+        // Tag ekleme (opsiyonel)
         if (dto.Tags != null && dto.Tags.Count > 0)
         {
             var names = dto.Tags
@@ -108,7 +126,7 @@ public class FoldersController : ControllerBase
             await _db.SaveChangesAsync();
         }
 
-        var owner = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid);
+        var owner = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == auth.UserId);
         return Ok(new FolderVm(
             folder.Id, folder.Name, folder.ParentId, folder.Path, folder.Level,
             folder.OwnerId, owner?.Email, owner?.Name, folder.UpdatedAt
@@ -122,16 +140,16 @@ public class FoldersController : ControllerBase
         if (string.IsNullOrWhiteSpace(dto.Name))
             return BadRequest("Folder name is required.");
 
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var folder = await _db.Folders.FirstOrDefaultAsync(f => f.Id == id);
         if (folder is null) return NotFound();
 
-        if (!(IsPrivileged() || folder.OwnerId == uid)) return Forbid();
+        // Düzenleme: admin herkes; super/user sadece kendi klasörü
+        if (!(auth.IsAdmin || folder.OwnerId == auth.UserId)) return Forbid();
 
         var newName = dto.Name.Trim();
 
-        // aynı parent altında çakışan isim var mı?
         var exists = await _db.Folders.AnyAsync(f =>
             f.Id != id &&
             f.ParentId == folder.ParentId &&
@@ -139,8 +157,7 @@ public class FoldersController : ControllerBase
         );
         if (exists) return BadRequest($"'{newName}' isimli klasör zaten mevcut.");
 
-        // path güncelle
-        var oldPath = folder.Path; // /A/B/Eski
+        var oldPath = folder.Path;
         var lastSlash = oldPath.LastIndexOf('/');
         var parentPath = (lastSlash <= 0) ? "" : oldPath.Substring(0, lastSlash);
         var newPath = string.IsNullOrEmpty(parentPath) ? $"/{newName}" : $"{parentPath}/{newName}";
@@ -149,7 +166,6 @@ public class FoldersController : ControllerBase
         folder.Path = newPath;
         folder.UpdatedAt = DateTime.UtcNow;
 
-        // altların path'ini taşı
         var descendants = await _db.Folders
             .Where(f => f.Path.StartsWith(oldPath + "/"))
             .ToListAsync();
@@ -165,14 +181,13 @@ public class FoldersController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var target = await _db.Folders.FirstOrDefaultAsync(f => f.Id == id);
         if (target is null) return NotFound();
 
-        var privileged = IsPrivileged();
-        var isOwner = target.OwnerId == uid;
-        if (!(privileged || isOwner)) return Forbid();
+        // Silme: admin herkes; super/user sadece kendi klasörü
+        if (!(auth.IsAdmin || target.OwnerId == auth.UserId)) return Forbid();
 
         var tree = await _db.Folders.Where(f => f.Path.StartsWith(target.Path)).ToListAsync();
         var treeIds = tree.Select(f => f.Id).ToList();
@@ -189,7 +204,6 @@ public class FoldersController : ControllerBase
         _db.Folders.RemoveRange(tree);
         await _db.SaveChangesAsync();
 
-        // kullanılmayan tag'leri temizle
         await TagsController.CleanupUnusedTagsAsync(_db);
 
         return NoContent();
@@ -215,13 +229,15 @@ public class FoldersController : ControllerBase
         [FromQuery] bool propagate = true,
         [FromQuery] bool recursive = false)
     {
-        if (!TryGetUserId(out var uid)) return Forbid();
+        var auth = GetAuth();
 
         var folder = await _db.Folders
             .Include(f => f.FolderTags)
             .FirstOrDefaultAsync(f => f.Id == id);
         if (folder is null) return NotFound();
-        if (!(IsPrivileged() || folder.OwnerId == uid)) return Forbid();
+
+        // Tag düzenleme: admin herkes; super/user sadece kendi klasörü
+        if (!(auth.IsAdmin || folder.OwnerId == auth.UserId)) return Forbid();
 
         _db.FolderTags.RemoveRange(folder.FolderTags);
 
@@ -246,7 +262,6 @@ public class FoldersController : ControllerBase
             else await PropagateTagsOneLevel(id);
         }
 
-        // kullanılmayan tag'leri temizle (olabilir)
         await TagsController.CleanupUnusedTagsAsync(_db);
 
         return NoContent();
